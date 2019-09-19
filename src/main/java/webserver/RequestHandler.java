@@ -8,13 +8,19 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
+import java.net.URISyntaxException;
 
-import webserver.request.CustomRequest;
+import model.User;
+import utils.FileIoUtils;
+import webserver.request.Request;
 import webserver.response.CustomResponse;
 import webserver.response.MediaType;
+import webserver.response.ResponseBody;
+import webserver.response.ResponseHeaders;
 import webserver.response.ResponseStatus;
 
 public class RequestHandler implements Runnable {
+
     private static final Logger logger = LoggerFactory.getLogger(RequestHandler.class);
 
     private Socket connection;
@@ -27,52 +33,66 @@ public class RequestHandler implements Runnable {
         logger.debug("New Client Connect! Connected IP : {}, Port : {}", connection.getInetAddress(),
                 connection.getPort());
 
-        try (InputStream inputStream = connection.getInputStream(); OutputStream out = connection.getOutputStream()) {
-            // TODO 사용자 요청에 대한 처리는 이 곳에 구현하면 된다.
-            CustomRequest customRequest = CustomRequest.of(inputStream);
+        try (InputStream in = connection.getInputStream(); OutputStream out = connection.getOutputStream()) {
+            Request request = Request.of(in);
 
             DataOutputStream dos = new DataOutputStream(out);
 
-//            String filePath = getFilePath(customRequest.getPath());
-//            byte[] body = FileIoUtils.loadFileFromClasspath(filePath);
+            String path = request.getPath();
+            int index = path.lastIndexOf(".");
 
-            // request header - version
-            // response code - 200, OK
-            // Content-type
-            // content-length - body,
-//            CustomResponse customResponse = CustomResponse.of(customRequest.getVersion(), OK, body);
-            CustomResponse.response(customRequest.getVersion(), ResponseStatus.FOUND, null, dos, MediaType.ALL_VALUE);
-//            response200Header(dos, body.length);
-//            responseBody(dos, body);
-        } catch (IOException /*| URISyntaxException*/ e) {
+            String extension = path.substring(index + 1);
+            if (index != -1 && !extension.equals("html") && request.isGet()) {
+                ResponseHeaders responseHeaders = new ResponseHeaders();
+                ResponseBody responseBody = new ResponseBody(path);
+                CustomResponse customResponse = new CustomResponse(ResponseStatus.OK, responseHeaders, responseBody);
+                customResponse.doGet(dos, extension);
+            }
+
+            if (path.equals("/index.html") && request.isGet()) {
+                get(dos, path, index);
+            }
+
+
+            if (path.equals("/user/form.html") && request.isGet()) {
+                get(dos, path, index);
+            }
+
+            if (path.equals("/user/create") && request.isPost()) {
+                User user = new User(
+                        request.getBody("userId"),
+                        request.getBody("password"),
+                        request.getBody("name"),
+                        request.getBody("email")
+                );
+
+                logger.debug("user : {}", user);
+
+                ResponseHeaders responseHeaders = new ResponseHeaders();
+
+                responseHeaders.put("status", ResponseStatus.FOUND);
+                responseHeaders.put("Location", "/index.html");
+
+                CustomResponse.response(responseHeaders, null, dos);
+                return;
+            }
+
+        } catch (IOException | URISyntaxException e) {
             logger.error(e.getMessage());
         }
     }
 
-    private String getFilePath(String path) {
-        if (path.endsWith(".html")) {
-            return "./templates" + path;
-        }
-        return "./static" + path;
-    }
+    private void get(DataOutputStream dos, String path, int index) throws IOException, URISyntaxException {
+        byte[] body = FileIoUtils.loadFileFromClasspath(path);
 
-    private void response200Header(DataOutputStream dos, int lengthOfBodyContent) {
-        try {
-            dos.writeBytes("HTTP/1.1 200 OK \r\n");
-            dos.writeBytes("Content-Type: text/html;charset=utf-8\r\n");
-            dos.writeBytes("Content-Length: " + lengthOfBodyContent + "\r\n");
-            dos.writeBytes("\r\n");
-        } catch (IOException e) {
-            logger.error(e.getMessage());
-        }
-    }
+        ResponseHeaders responseHeaders = new ResponseHeaders();
 
-    private void responseBody(DataOutputStream dos, byte[] body) {
-        try {
-            dos.write(body, 0, body.length);
-            dos.flush();
-        } catch (IOException e) {
-            logger.error(e.getMessage());
-        }
+        responseHeaders.put("status", ResponseStatus.OK);
+        responseHeaders.put("Content-Type", MediaType.of(path.substring(index + 1)).getMediaType());
+        responseHeaders.put("Content-Length", body.length);
+
+        CustomResponse.response(responseHeaders, body, dos);
+
+        return;
     }
 }

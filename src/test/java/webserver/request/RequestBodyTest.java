@@ -18,7 +18,7 @@ class RequestBodyTest {
         requestBody.put(PARAMS);
     }
 
-    @DisplayName("성공적으로 RequestBody 의 get 메서드를 수행한다.")
+    @DisplayName("성공적으로 RequestBody 의 doGet 메서드를 수행한다.")
     @Test
     void putAndGet() {
         assertEquals(requestBody.get("userId"), "javajigi");
@@ -27,7 +27,7 @@ class RequestBodyTest {
         assertEquals(requestBody.get("email"), "javajigi%40slipp.net");
     }
 
-    @DisplayName("해당되는 key 가 존재하지 않는 RequestBody get 메서드는 실패한다.")
+    @DisplayName("해당되는 key 가 존재하지 않는 RequestBody doGet 메서드는 실패한다.")
     @Test
     void getFailWhenNoKeyValuePair() {
         assertThrows(IllegalArgumentException.class, () -> requestBody.get("middle"));
